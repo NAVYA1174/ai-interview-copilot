@@ -1,33 +1,19 @@
-import OpenAI from "openai";
+import { mockQuestions } from "@/lib/mockQuestions";
 
-export async function POST(req) {
-  try {
-    const { role } = await req.json();
+export async function GET() {
+  // fallback AI behavior (no API cost)
+  const random = mockQuestions[Math.floor(Math.random() * mockQuestions.length)];
 
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+  // "AI-like expansion" (makes it feel dynamic)
+  const variations = [
+    "Let's start with: " + random.question,
+    "Can you explain: " + random.question,
+    "Tell me in detail: " + random.question,
+  ];
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are an interviewer. Ask ONE ${role} interview question.`,
-        },
-      ],
-    });
-
-    return Response.json({
-      question: response.choices[0].message.content,
-    });
-
-  } catch (error) {
-    console.error("API ERROR:", error);
-
-    return Response.json(
-      { error: "Failed to generate question" },
-      { status: 500 }
-    );
-  }
+  return Response.json({
+    id: random.id,
+    question: variations[Math.floor(Math.random() * variations.length)],
+    keywords: random.keywords,
+  });
 }

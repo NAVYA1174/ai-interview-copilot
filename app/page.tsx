@@ -1,187 +1,174 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type Message = {
+  role: "ai" | "user";
+  text: string;
+};
+
+type Attempt = {
+  question: string;
+  score: number;
+};
 
 export default function Home() {
-  const [started, setStarted] = useState(false);
-  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [answer, setAnswer] = useState("");
-  const [result, setResult] = useState("");
-  const [role, setRole] = useState("react");
-  const [scores, setScores] = useState<string[]>([]);
+  const [score, setScore] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [questionId, setQuestionId] = useState<number | null>(null);
+  const [history, setHistory] = useState<Attempt[]>([]);
 
-  const getQuestion = async () => {
-    const res = await fetch(`/api/question?role=${role}`);
-    const data = await res.json();
-    setQuestion(data.question);
-  };
-
-  const startInterview = async () => {
-    setStarted(true);
-    setAnswer("");
-    setResult("");
-    await getQuestion();
-  };
-
-  const speak = (text: string) => {
-    const speech = new SpeechSynthesisUtterance(text);
-    speech.lang = "en-US";
-    window.speechSynthesis.speak(speech);
-  };
-
-  const startVoice = () => {
+  const startVoiceInput = () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
+    if (!SpeechRecognition) return alert("Use Chrome");
+
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-
     recognition.start();
 
     recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
-      setAnswer(text);
+      setAnswer(event.results[0][0].transcript);
     };
   };
 
-  const evaluateAnswer = async () => {
+  const fetchQuestion = async () => {
+    const res = await fetch("/api/question");
+    const data = await res.json();
+
+    setQuestionId(data.id);
+    setMessages((prev) => [...prev, { role: "ai", text: data.question }]);
+    setAnswer("");
+    setScore(null);
+    setFeedback("");
+  };
+
+  useEffect(() => {
+    fetchQuestion();
+  }, []);
+
+  const submitAnswer = async () => {
+    const currentQuestion =
+      messages.find((m) => m.role === "ai")?.text || "";
+
+    setMessages((p) => [...p, { role: "user", text: answer }]);
+
     const res = await fetch("/api/evaluate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, answer, role }),
+      body: JSON.stringify({ id: questionId, answer }),
     });
 
     const data = await res.json();
 
-    setResult(data.result);
-    setScores((prev) => [...prev, data.result]);
+    setScore(data.score);
+    setFeedback(data.feedback);
+
+    setHistory((p) => [
+      ...p,
+      { question: currentQuestion, score: data.score },
+    ]);
+
+    setAnswer("");
   };
 
   return (
-    <div
-      style={{
-        padding: 40,
-        textAlign: "center",
-        fontFamily: "Arial",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 15,
-      }}
-    >
-      <h1>🤖 AI Interview Copilot</h1>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center p-6">
+      <h1 className="text-3xl font-bold mb-4">
+        🚀 AI Interview Copilot
+      </h1>
 
-      {/* ROLE SELECTOR */}
-      {!started && (
-        <div style={{ marginBottom: 20 }}>
-          <h3>Select Role</h3>
-
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            style={{ padding: 10 }}
+      {/* CHAT BOX */}
+      <div className="w-full max-w-2xl h-[420px] overflow-y-auto bg-zinc-900 p-4 rounded-xl border border-zinc-700">
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`my-2 flex ${
+              msg.role === "ai" ? "justify-start" : "justify-end"
+            }`}
           >
-            <option value="react">React Developer</option>
-            <option value="node">Node.js Developer</option>
-            <option value="python">Python Developer</option>
-            <option value="frontend">Frontend Developer</option>
-            <option value="backend">Backend Developer</option>
-          </select>
+            <div
+              className={`px-4 py-2 rounded-2xl max-w-[75%] ${
+                msg.role === "ai"
+                  ? "bg-zinc-700 text-white"
+                  : "bg-indigo-600 text-white"
+              }`}
+            >
+              {msg.text}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* INPUT */}
+      <textarea
+        className="w-full max-w-2xl mt-4 p-3 rounded-lg text-black"
+        rows={3}
+        value={answer}
+        onChange={(e) => setAnswer(e.target.value)}
+        placeholder="Type or speak your answer..."
+      />
+
+      {/* BUTTONS */}
+      <div className="flex gap-3 mt-3">
+        <button
+          onClick={submitAnswer}
+          className="bg-green-600 px-4 py-2 rounded-lg"
+        >
+          Submit
+        </button>
+
+        <button
+          onClick={fetchQuestion}
+          className="bg-blue-600 px-4 py-2 rounded-lg"
+        >
+          Next
+        </button>
+
+        <button
+          onClick={startVoiceInput}
+          className="bg-purple-600 px-4 py-2 rounded-lg"
+        >
+          🎤 Speak
+        </button>
+      </div>
+
+      {/* SCORE */}
+      {score !== null && (
+        <div className="mt-4 bg-zinc-900 p-4 rounded-xl w-full max-w-2xl">
+          <h2 className="text-xl">Score: {score}</h2>
+          <p className="text-gray-300">{feedback}</p>
         </div>
       )}
 
-      {!started ? (
-        <button onClick={startInterview} style={{ padding: 10 }}>
-          Start Interview
-        </button>
-      ) : (
-        <>
-          <h2>📌 Role: {role.toUpperCase()}</h2>
+      {/* DASHBOARD */}
+      <div className="mt-6 w-full max-w-2xl">
+        <h2 className="text-xl mb-2">📊 Performance</h2>
 
-          <h3>Question:</h3>
-          <p style={{ fontSize: 18 }}>{question}</p>
+        <p className="mb-2">
+          Avg Score:{" "}
+          {history.length
+            ? Math.round(
+                history.reduce((a, b) => a + b.score, 0) /
+                  history.length
+              )
+            : 0}
+        </p>
 
-          <button onClick={() => speak(question)} style={{ padding: 8 }}>
-            🔊 Hear Question
-          </button>
-
-          <button onClick={startVoice} style={{ padding: 8 }}>
-            🎤 Speak Answer
-          </button>
-
-          <p>
-            <b>Your Answer:</b> {answer}
-          </p>
-
-          <button onClick={evaluateAnswer} style={{ padding: 10 }}>
-            📊 Evaluate Answer
-          </button>
-
-          {/* RESULT BOX */}
-          {result && (
-            <div
-              style={{
-                marginTop: 20,
-                padding: 15,
-                border: "1px solid #ccc",
-                borderRadius: 10,
-                maxWidth: 500,
-                textAlign: "left",
-              }}
-            >
-              <h3>📊 AI Evaluation</h3>
-              <pre style={{ whiteSpace: "pre-wrap" }}>{result}</pre>
-            </div>
-          )}
-
-          {/* DASHBOARD */}
-          {scores.length > 0 && (
-            <div
-              style={{
-                marginTop: 30,
-                padding: 15,
-                border: "2px solid #ddd",
-                borderRadius: 10,
-                maxWidth: 500,
-                textAlign: "left",
-              }}
-            >
-              <h3>📊 Performance Dashboard</h3>
-
-              {scores.map((s, i) => (
-                <div
-                  key={i}
-                  style={{
-                    marginBottom: 10,
-                    padding: 10,
-                    background: "#f5f5f5",
-                    borderRadius: 8,
-                  }}
-                >
-                  <b>Interview {i + 1}</b>
-                  <pre style={{ whiteSpace: "pre-wrap" }}>{s}</pre>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-            <button onClick={getQuestion}>➡️ Next Question</button>
-
-            <button
-              onClick={() => {
-                setStarted(false);
-                setQuestion("");
-                setAnswer("");
-                setResult("");
-              }}
-            >
-              ❌ End Interview
-            </button>
+        {history.map((h, i) => (
+          <div
+            key={i}
+            className="bg-zinc-800 p-3 rounded-lg mb-2"
+          >
+            <p className="text-sm text-gray-300">{h.question}</p>
+            <p className="text-green-400">Score: {h.score}</p>
           </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
