@@ -27,7 +27,10 @@ export async function POST(req: Request) {
 
   if (score >= 80) feedback = "Excellent answer 🔥";
   else if (score >= 50) feedback = "Good answer 👍";
-  else feedback = "Try adding more technical depth";
+  else feedback = "Try adding more details";
 
-  return Response.json({ score, feedback });
+  return Response.json({
+    score,
+    feedback,
+  });
 }
