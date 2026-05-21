@@ -1,14 +1,13 @@
 import { mockQuestions } from "@/lib/mockQuestions";
 
 export async function GET() {
-  // fallback AI behavior (no API cost)
-  const random = mockQuestions[Math.floor(Math.random() * mockQuestions.length)];
+  const random =
+    mockQuestions[Math.floor(Math.random() * mockQuestions.length)];
 
-  // "AI-like expansion" (makes it feel dynamic)
   const variations = [
     "Let's start with: " + random.question,
-    "Can you explain: " + random.question,
-    "Tell me in detail: " + random.question,
+    "Explain this: " + random.question,
+    "Tell me about: " + random.question,
   ];
 
   return Response.json({

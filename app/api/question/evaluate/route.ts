@@ -1,32 +1,33 @@
-import OpenAI from "openai";
-import { NextResponse } from "next/server";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { mockQuestions } from "@/lib/mockQuestions";
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+  const { id, answer } = await req.json();
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "user",
-          content: `Evaluate this interview answer: ${body.answer}`,
-        },
-      ],
-    });
+  const question = mockQuestions.find((q) => q.id === id);
 
-    return NextResponse.json({
-      result: completion.choices[0].message.content,
-    });
-  } catch (error: any) {
-    console.log(error);
-
-    return NextResponse.json({
-      result: "Evaluation failed",
-    });
+  if (!question) {
+    return Response.json({ error: "Invalid question" });
   }
+
+  let score = 0;
+
+  const text = answer.toLowerCase();
+
+  question.keywords.forEach((k) => {
+    if (text.includes(k)) score += 25;
+  });
+
+  if (text.length > 200) score += 10;
+  if (text.includes("example")) score += 10;
+
+  if (score > 100) score = 100;
+  if (score < 10) score = 10;
+
+  let feedback = "";
+
+  if (score >= 80) feedback = "Excellent answer 🔥";
+  else if (score >= 50) feedback = "Good answer 👍";
+  else feedback = "Try adding more technical depth";
+
+  return Response.json({ score, feedback });
 }
