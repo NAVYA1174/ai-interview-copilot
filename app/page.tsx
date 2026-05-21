@@ -18,17 +18,25 @@ export default function Home() {
   const [score, setScore] = useState<number | null>(null);
   const [feedback, setFeedback] = useState("");
   const [questionId, setQuestionId] = useState<number | null>(null);
-  const [history, setHistory] = useState<Attempt[]>([]);
 
+  const [history, setHistory] = useState<Attempt[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 🎤 VOICE INPUT
   const startVoiceInput = () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) return alert("Use Chrome");
+    if (!SpeechRecognition) {
+      alert("Use Chrome browser for voice input");
+      return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
+    recognition.interimResults = false;
+
     recognition.start();
 
     recognition.onresult = (event: any) => {
@@ -36,31 +44,52 @@ export default function Home() {
     };
   };
 
+  // 📌 GET QUESTION
   const fetchQuestion = async () => {
+    setLoading(true);
+
     const res = await fetch("/api/question");
     const data = await res.json();
 
     setQuestionId(data.id);
-    setMessages((prev) => [...prev, { role: "ai", text: data.question }]);
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "ai", text: data.question },
+    ]);
+
     setAnswer("");
     setScore(null);
     setFeedback("");
+
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchQuestion();
   }, []);
 
+  // 📊 EVALUATE ANSWER
   const submitAnswer = async () => {
+    if (!answer.trim()) return;
+
     const currentQuestion =
       messages.find((m) => m.role === "ai")?.text || "";
 
-    setMessages((p) => [...p, { role: "user", text: answer }]);
+    setLoading(true);
+
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: answer },
+    ]);
 
     const res = await fetch("/api/evaluate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: questionId, answer }),
+      body: JSON.stringify({
+        id: questionId,
+        answer,
+      }),
     });
 
     const data = await res.json();
@@ -68,40 +97,51 @@ export default function Home() {
     setScore(data.score);
     setFeedback(data.feedback);
 
-    setHistory((p) => [
-      ...p,
+    setHistory((prev) => [
+      ...prev,
       { question: currentQuestion, score: data.score },
     ]);
 
     setAnswer("");
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center p-6">
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center p-6">
+      
+      {/* HEADER */}
       <h1 className="text-3xl font-bold mb-4">
         🚀 AI Interview Copilot
       </h1>
 
       {/* CHAT BOX */}
-      <div className="w-full max-w-2xl h-[420px] overflow-y-auto bg-zinc-900 p-4 rounded-xl border border-zinc-700">
+      <div className="w-full max-w-2xl h-[420px] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`my-2 flex ${
+            className={`flex my-2 ${
               msg.role === "ai" ? "justify-start" : "justify-end"
             }`}
           >
             <div
-              className={`px-4 py-2 rounded-2xl max-w-[75%] ${
+              className={`px-4 py-2 rounded-2xl max-w-[75%] text-sm ${
                 msg.role === "ai"
-                  ? "bg-zinc-700 text-white"
-                  : "bg-indigo-600 text-white"
+                  ? "bg-zinc-700"
+                  : "bg-indigo-600"
               }`}
             >
               {msg.text}
             </div>
           </div>
         ))}
+
+        {/* AI TYPING */}
+        {loading && (
+          <div className="text-gray-400 text-sm mt-2">
+            AI is thinking...
+          </div>
+        )}
       </div>
 
       {/* INPUT */}
@@ -140,17 +180,19 @@ export default function Home() {
       {/* SCORE */}
       {score !== null && (
         <div className="mt-4 bg-zinc-900 p-4 rounded-xl w-full max-w-2xl">
-          <h2 className="text-xl">Score: {score}</h2>
+          <h2 className="text-xl font-semibold">Score: {score}</h2>
           <p className="text-gray-300">{feedback}</p>
         </div>
       )}
 
       {/* DASHBOARD */}
       <div className="mt-6 w-full max-w-2xl">
-        <h2 className="text-xl mb-2">📊 Performance</h2>
+        <h2 className="text-lg font-semibold mb-2">
+          📊 Performance Dashboard
+        </h2>
 
-        <p className="mb-2">
-          Avg Score:{" "}
+        <p className="text-sm text-gray-300 mb-3">
+          Average Score:{" "}
           {history.length
             ? Math.round(
                 history.reduce((a, b) => a + b.score, 0) /
@@ -164,8 +206,12 @@ export default function Home() {
             key={i}
             className="bg-zinc-800 p-3 rounded-lg mb-2"
           >
-            <p className="text-sm text-gray-300">{h.question}</p>
-            <p className="text-green-400">Score: {h.score}</p>
+            <p className="text-sm text-gray-300">
+              {h.question}
+            </p>
+            <p className="text-green-400 font-medium">
+              Score: {h.score}
+            </p>
           </div>
         ))}
       </div>
